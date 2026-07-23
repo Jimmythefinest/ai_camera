@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Security Camera Fleet</title>
+<style>
+  body { background:#111; color:#eee; font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin:0; padding:24px; }
+  h1 { font-size:20px; margin-bottom:16px; }
+  #add-form { display:flex; gap:8px; margin-bottom:24px; }
+  #add-form input { background:#1e1e1e; border:1px solid #333; color:#eee; padding:8px 10px; border-radius:6px; }
+  #add-form button { background:#2d6cdf; border:none; color:#fff; padding:8px 14px; border-radius:6px; cursor:pointer; }
+  #add-form button:hover { background:#1f57c0; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:16px; }
+  .cam { background:#1a1a1a; border:1px solid #2a2a2a; border-radius:10px; overflow:hidden; }
+  .cam img { width:100%; display:block; background:#000; aspect-ratio: 4/3; object-fit:cover; }
+  .cam-info { padding:10px 12px; font-size:13px; }
+  .cam-info .row { display:flex; justify-content:space-between; margin-bottom:4px; color:#aaa; }
+  .status-connected { color:#4caf50; }
+  .status-connecting { color:#e0a800; }
+  .status-disconnected { color:#e05555; }
+  .remove-btn { background:none; border:none; color:#e05555; cursor:pointer; font-size:12px; float:right; }
+  .detection { color:#ffd166; }
+</style>
+</head>
+<body>
+<h1>Camera Fleet</h1>
+
+<form id="add-form">
+  <input id="cam-id" placeholder="camera id (e.g. front-door)" required>
+  <input id="cam-ip" placeholder="ESP32 IP (e.g. 192.168.1.50)" required>
+  <button type="submit">Add camera</button>
+</form>
+
+<div id="grid" class="grid"></div>
+
+<script>
+async function refreshList() {
+  const res = await fetch('/api/cameras');
+  const cams = await res.json();
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  for (const [id, c] of Object.entries(cams)) {
+    const div = document.createElement('div');
+    div.className = 'cam';
+    const lastDet = c.last_detection && c.last_detection.length
+      ? c.last_detection.join(', ')
+      : 'none recently';
+    const lastFrame = c.last_frame_time
+      ? new Date(c.last_frame_time * 1000).toLocaleTimeString()
+      : 'never';
+    div.innerHTML = `
+      <img src="/feed/${id}" alt="${id}">
+      <div class="cam-info">
+        <button class="remove-btn" onclick="removeCam('${id}')">remove</button>
+        <div class="row"><span>${id}</span><span class="status-${c.status}">${c.status}</span></div>
+        <div class="row"><span>ip</span><span>${c.ip}</span></div>
+        <div class="row"><span>last frame</span><span>${lastFrame}</span></div>
+        <div class="row"><span>last detection</span><span class="detection">${lastDet}</span></div>
+      </div>
+    `;
+    grid.appendChild(div);
+  }
+}
+
+async function removeCam(id) {
+  await fetch(`/api/cameras/${id}`, { method: 'DELETE' });
+  refreshList();
+}
+
+document.getElementById('add-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('cam-id').value.trim();
+  const ip = document.getElementById('cam-ip').value.trim();
+  const res = await fetch('/api/cameras', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, ip })
+  });
+  if (res.ok) {
+    document.getElementById('cam-id').value = '';
+    document.getElementById('cam-ip').value = '';
+    refreshList();
+  } else {
+    const err = await res.json();
+    alert(err.error || 'failed to add camera');
+  }
+});
+
+refreshList();
+setInterval(refreshList, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+__pycache__/
+.kilo/
+alert_snapshots/
+env/
+frames/
+*.mp4
+*jpeg
+DWPose/
+*.
